@@ -1,0 +1,55 @@
+name: Poll Roster Discord Leads
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  poll-roster-discord:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Poll Roster Discord channel and create Monday leads
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          MONDAY_API_TOKEN: ${{ secrets.MONDAY_API_TOKEN }}
+          ROSTER_DISCORD_ALLOWED_CHANNEL_IDS: ${{ secrets.ROSTER_DISCORD_ALLOWED_CHANNEL_IDS }}
+
+          # Optional overrides. If these secrets are blank/missing, the Python defaults are used.
+          MONDAY_BOARD_ID: ${{ secrets.MONDAY_BOARD_ID }}
+          MONDAY_DEFAULT_GROUP_ID: ${{ secrets.MONDAY_DEFAULT_GROUP_ID }}
+          ROSTER_CHANNEL_GROUP_MAP: ${{ secrets.ROSTER_CHANNEL_GROUP_MAP }}
+          ROSTER_DISCORD_LOOKBACK_LIMIT: ${{ secrets.ROSTER_DISCORD_LOOKBACK_LIMIT }}
+          COL_REFERRAL_BONUS: ${{ secrets.COL_REFERRAL_BONUS }}
+        run: python poll_roster_discord_channel_links.py
+
+      - name: Commit poller state
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n "$(git status --porcelain roster_seen_state.json)" ]]; then
+            git add roster_seen_state.json
+            git commit -m "Update Roster poller state"
+            git push
+          else
+            echo "No Roster state changes to commit."
+          fi
